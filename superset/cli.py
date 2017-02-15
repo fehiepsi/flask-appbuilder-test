@@ -31,6 +31,10 @@ def init():
     '-d', '--debug', action='store_true',
     help="Start the web server in debug mode")
 @manager.option(
+    '-n', '--no-reload', action='store_false', dest='no_reload',
+    default=config.get("FLASK_USE_RELOAD"),
+    help="Don't use the reloader in debug mode")
+@manager.option(
     '-a', '--address', default=config.get("SUPERSET_WEBSERVER_ADDRESS"),
     help="Specify the address to which to bind the web server")
 @manager.option(
@@ -42,7 +46,7 @@ def init():
 @manager.option(
     '-t', '--timeout', default=config.get("SUPERSET_WEBSERVER_TIMEOUT"),
     help="Specify the timeout (seconds) for the gunicorn web server")
-def runserver(debug, address, port, timeout, workers):
+def runserver(debug, no_reload, address, port, timeout, workers):
     """Starts a Superset web server"""
     debug = debug or config.get("DEBUG")
     if debug:
@@ -50,7 +54,8 @@ def runserver(debug, address, port, timeout, workers):
             host='0.0.0.0',
             port=int(port),
             threaded=True,
-            debug=True)
+            debug=True,
+            use_reloader=no_reload)
     else:
         cmd = (
             "gunicorn "
@@ -117,13 +122,13 @@ def load_examples(load_test_data):
 @manager.option(
     '-d', '--datasource',
     help=(
-        "Specify which datasource name to load, if omitted, all "
-        "datasources will be refreshed"))
+            "Specify which datasource name to load, if omitted, all "
+            "datasources will be refreshed"))
 @manager.option(
     '-m', '--merge',
     help=(
-        "Specify using 'merge' property during operation. "
-        "Default value is False "))
+            "Specify using 'merge' property during operation. "
+            "Default value is False "))
 def refresh_druid(datasource, merge):
     """Refresh druid datasources"""
     session = db.session()
@@ -144,8 +149,10 @@ def refresh_druid(datasource, merge):
     session.commit()
 
 
-@manager.command
-def worker():
+@manager.option(
+    '-w', '--workers', default=config.get("SUPERSET_CELERY_WORKERS", 32),
+    help="Number of celery server workers to fire up")
+def worker(workers):
     """Starts a Superset worker for async SQL query execution."""
     # celery -A tasks worker --loglevel=info
     print("Starting SQL Celery worker.")
@@ -159,5 +166,6 @@ def worker():
         'broker': config.get('CELERY_CONFIG').BROKER_URL,
         'loglevel': 'INFO',
         'traceback': True,
+        'concurrency': int(workers),
     }
     c_worker.run(**options)

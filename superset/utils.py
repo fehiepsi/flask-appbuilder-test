@@ -8,7 +8,6 @@ import decimal
 import functools
 import json
 import logging
-import markdown as md
 import numpy
 import os
 import parsedatetime
@@ -25,8 +24,15 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from email.utils import formatdate
-from flask import flash, Markup, render_template
+from flask import flash, Markup, render_template, url_for, redirect, request
+from flask_appbuilder.const import (
+    LOGMSG_ERR_SEC_ACCESS_DENIED,
+    FLAMSG_ERR_SEC_ACCESS_DENIED,
+    PERMISSION_PREFIX
+)
+from flask_appbuilder._compat import as_unicode
 from flask_babel import gettext as __
+import markdown as md
 from past.builtins import basestring
 from pydruid.utils.having import Having
 from sqlalchemy import event, exc
@@ -63,13 +69,13 @@ class SupersetTemplateException(SupersetException):
     pass
 
 
-def can_access(security_manager, permission_name, view_name):
+def can_access(sm, permission_name, view_name, user):
     """Protecting from has_access failing from missing perms/view"""
-    try:
-        return security_manager.has_access(permission_name, view_name)
-    except:
-        pass
-    return False
+    return (
+        sm.is_item_public(permission_name, view_name) or
+        (not user.is_anonymous() and
+         sm._has_view_access(user, permission_name, view_name))
+    )
 
 
 def flasher(msg, severity=None):
@@ -114,6 +120,10 @@ class memoized(object):  # noqa
     def __get__(self, obj, objtype):
         """Support instance methods."""
         return functools.partial(self.__call__, obj)
+
+
+def js_string_to_python(item):
+    return None if item in ('null', 'undefined') else item
 
 
 class DimSelector(Having):
@@ -285,6 +295,10 @@ def json_int_dttm_ser(obj):
     return obj
 
 
+def json_dumps_w_dates(payload):
+    return json.dumps(payload, default=json_int_dttm_ser)
+
+
 def error_msg_from_exception(e):
     """Translate exception into error message
 
@@ -319,8 +333,8 @@ def markdown(s, markup_wrap=False):
     return s
 
 
-def readfile(filepath):
-    with open(filepath) as f:
+def readfile(file_path):
+    with open(file_path) as f:
         content = f.read()
     return content
 
@@ -436,7 +450,7 @@ def notify_user_about_perm_udate(
     subject = __('[Superset] Access to the datasource %(name)s was granted',
                  name=datasource.full_name)
     send_email_smtp(user.email, subject, msg, config, bcc=granter.email,
-                    dryrun=config.get('EMAIL_NOTIFICATIONS'))
+                    dryrun=not config.get('EMAIL_NOTIFICATIONS'))
 
 
 def send_email_smtp(to, subject, html_content, config, files=None,
@@ -478,7 +492,7 @@ def send_email_smtp(to, subject, html_content, config, files=None,
                 Name=basename
             ))
 
-    send_MIME_email(smtp_mail_from, recipients, msg, config, dryrun)
+    send_MIME_email(smtp_mail_from, recipients, msg, config, dryrun=dryrun)
 
 
 def send_MIME_email(e_from, e_to, mime_msg, config, dryrun=False):
@@ -513,3 +527,35 @@ def get_email_address_list(address_string):
         else:
             address_string = [address_string]
     return address_string
+
+
+# Forked from the flask_appbuilder.security.decorators
+# TODO(bkyryliuk): contribute it back to FAB
+def has_access(f):
+    """
+        Use this decorator to enable granular security permissions to your
+        methods. Permissions will be associated to a role, and roles are
+        associated to users.
+
+        By default the permission's name is the methods name.
+    """
+    if hasattr(f, '_permission_name'):
+        permission_str = f._permission_name
+    else:
+        permission_str = f.__name__
+
+    def wraps(self, *args, **kwargs):
+        permission_str = PERMISSION_PREFIX + f._permission_name
+        if self.appbuilder.sm.has_access(
+                permission_str, self.__class__.__name__):
+            return f(self, *args, **kwargs)
+        else:
+            logging.warning(LOGMSG_ERR_SEC_ACCESS_DENIED.format(
+                permission_str, self.__class__.__name__))
+            flash(as_unicode(FLAMSG_ERR_SEC_ACCESS_DENIED), "danger")
+        # adds next arg to forward to the original path once user is logged in.
+        return redirect(url_for(
+            self.appbuilder.sm.auth_view.__class__.__name__ + ".login",
+            next=request.path))
+    f._permission_name = permission_str
+    return functools.update_wrapper(wraps, f)

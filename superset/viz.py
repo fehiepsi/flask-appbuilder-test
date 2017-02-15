@@ -178,7 +178,7 @@ class BaseViz(object):
             for item in v:
                 ordered_data.add(key, item)
         href = Href(
-            '/caravel/filter/{self.datasource.type}/'
+            '/superset/filter/{self.datasource.type}/'
             '{self.datasource.id}/'.format(**locals()))
         return href(ordered_data)
 
@@ -269,7 +269,7 @@ class BaseViz(object):
         """Building a query object"""
         form_data = self.form_data
         groupby = form_data.get("groupby") or []
-        metrics = form_data.get("metrics") or []
+        metrics = form_data.get("metrics") or ['count']
         extra_filters = self.get_extra_filters()
         granularity = (
             form_data.get("granularity") or form_data.get("granularity_sqla")
@@ -360,8 +360,11 @@ class BaseViz(object):
             try:
                 data = self.get_data()
             except Exception as e:
+                logging.exception(e)
+                if not self.error_message:
+                    self.error_message = str(e)
+                self.status = utils.QueryStatus.FAILED
                 data = None
-
             payload = {
                 'cache_key': cache_key,
                 'cache_timeout': cache_timeout,
@@ -1351,18 +1354,16 @@ class NVD3DualLineViz(NVD3Viz):
         series = df.to_dict('series')
         chart_data = []
         index_list = df.T.index.tolist()
-        for i in range(0, len(index_list)):
-            name = index_list[i]
-            ys = series[name]
-            if df[name].dtype.kind not in "biufc":
+        metrics = [
+            self.form_data.get('metric'),
+            self.form_data.get('metric_2')
+        ]
+        for i, m in enumerate(metrics):
+            ys = series[m]
+            if df[m].dtype.kind not in "biufc":
                 continue
             df[DTTM_ALIAS] = pd.to_datetime(df.index, utc=False)
-            if isinstance(name, string_types):
-                series_title = name
-            else:
-                name = ["{}".format(s) for s in name]
-                series_title = ", ".join(name[1:])
-
+            series_title = m
             d = {
                 "key": series_title,
                 "classed": classed,
@@ -1511,7 +1512,8 @@ class HistogramViz(BaseViz):
     def query_obj(self):
         """Returns the query object for this visualization"""
         d = super(HistogramViz, self).query_obj()
-        d['row_limit'] = self.form_data.get('row_limit', int(config.get('ROW_LIMIT')))
+        d['row_limit'] = self.form_data.get(
+            'row_limit', int(config.get('VIZ_ROW_LIMIT')))
         numeric_column = self.form_data.get('all_columns_x')
         if numeric_column is None:
             raise Exception("Must have one numeric column specified")

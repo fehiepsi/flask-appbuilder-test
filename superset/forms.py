@@ -20,7 +20,7 @@ from superset import app
 config = app.config
 
 TIMESTAMP_CHOICES = [
-    ('smart_date', 'Adaptative formating'),
+    ('smart_date', 'Adaptive formatting'),
     ("%m/%d/%Y", '"%m/%d/%Y" | 01/14/2019'),
     ("%Y-%m-%d", '"%Y-%m-%d" | 2019-01-14'),
     ("%Y-%m-%d %H:%M:%S",
@@ -354,7 +354,7 @@ class FormFactory(object):
                 "choices": self.choicify(['auto', 50, 75, 100, 125, 150, 200]),
                 "default": 'auto',
                 "description": _(
-                    "Bottom marging, in pixels, allowing for more room for "
+                    "Bottom margin, in pixels, allowing for more room for "
                     "axis labels"),
             }),
             'page_length': (FreeFormSelectField, {
@@ -564,7 +564,7 @@ class FormFactory(object):
             }),
             'row_limit': (FreeFormSelectField, {
                 "label": _('Row limit'),
-                "default": config.get("ROW_LIMIT"),
+                "default": config.get("VIZ_ROW_LIMIT"),
                 "choices": self.choicify(
                     [10, 50, 100, 250, 500, 1000, 5000, 10000, 50000])
             }),

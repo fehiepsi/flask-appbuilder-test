@@ -30,12 +30,14 @@ with open(PACKAGE_FILE) as package_file:
     VERSION_STRING = json.load(package_file)['version']
 
 ROW_LIMIT = 50000
+VIZ_ROW_LIMIT = 10000
 SUPERSET_WORKERS = 2
+SUPERSET_CELERY_WORKERS = 32
 
 SUPERSET_WEBSERVER_ADDRESS = '0.0.0.0'
 SUPERSET_WEBSERVER_PORT = 8088
 SUPERSET_WEBSERVER_TIMEOUT = 60
-
+EMAIL_NOTIFICATIONS = False
 CUSTOM_SECURITY_MANAGER = None
 # ---------------------------------------------------------
 
@@ -55,6 +57,7 @@ CSRF_ENABLED = True
 
 # Whether to run the web server in debug mode or not
 DEBUG = False
+FLASK_USE_RELOAD = True
 
 # Whether to show the stacktrace on 500 error
 SHOW_STACKTRACE = True
@@ -74,6 +77,9 @@ APP_ICON = "/static/assets/images/superset-logo@2x.png"
 # Druid query timezone
 # tz.tzutc() : Using utc timezone
 # tz.tzlocal() : Using local timezone
+# tz.gettz('Asia/Shanghai') : Using the time zone with specific name
+# [TimeZone List]
+# See: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 # other tz can be overridden by providing a local_config
 DRUID_IS_ACTIVE = True
 DRUID_TZ = tz.tzutc()
@@ -148,6 +154,7 @@ IMG_UPLOAD_URL = '/static/uploads/'
 
 CACHE_DEFAULT_TIMEOUT = None
 CACHE_CONFIG = {'CACHE_TYPE': 'null'}
+TABLE_NAMES_CACHE_CONFIG = {'CACHE_TYPE': 'null'}
 
 # CORS Options
 ENABLE_CORS = False
@@ -201,7 +208,11 @@ BACKUP_COUNT = 30
 MAPBOX_API_KEY = ""
 
 # Maximum number of rows returned in the SQL editor
-SQL_MAX_ROW = 1000
+SQL_MAX_ROW = 1000000
+DISPLAY_SQL_MAX_ROW = 1000
+
+# Maximum number of tables/views displayed in the dropdown window in SQL Lab.
+MAX_TABLE_NAMES = 3000
 
 # If defined, shows this text in an alert-warning box in the navbar
 # one example use case may be "STAGING" to make it clear that this is
